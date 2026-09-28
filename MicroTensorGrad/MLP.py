@@ -1,36 +1,10 @@
 import numpy as np
 from Engine import MicroTensor
 from typing import Literal
+from Optimizers import Optimizer
 
 def HE_Initialization(in_ : int, out_ : int):
     return np.random.normal(loc=0, scale=np.sqrt(2/in_), size=(in_, out_))
-
-def create_Batches(X : np.ndarray, Y : np.ndarray, bacthSize : int):
-    dataset_size = len(X)
-    i = 0
-    Batches_X = []
-    Batches_Y = []
-    while i < dataset_size:
-        start = i
-        end = i + bacthSize if i + bacthSize < dataset_size else dataset_size
-        Batches_X.append(X[start:end])
-        Batches_Y.append(Y[start:end])
-        
-        i += bacthSize
-    
-    return (Batches_X, Batches_Y)
-
-class Optimizer:
-    def __init__(self, lr : float):
-        self.lr = lr
-
-class SGD(Optimizer):
-        
-    def update(self, steps):
-        for step in steps:
-            if step["optimize"]:
-                grad = np.mean(step["content"].grad, axis=0)
-                step["content"].array = step["content"].array - self.lr*grad
 
 class MLP:
     def __init__(self, components : list, LossFunction : Literal["MSE", "CrossEntropy"], optimizer : Optimizer):
@@ -99,6 +73,11 @@ class MLP:
                     "optimize" : False
                 }
             )
+            
+    def zero_grad(self):
+        for step in self.steps:
+            if step["optimize"]:
+                step["content"].zero_grad()
     
     def update(self):
         self.optimizer.update(self.steps)
