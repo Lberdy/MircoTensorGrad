@@ -10,12 +10,11 @@ class MicroTensor:
         self.grad = 0
     
     def __matmul__(self, other):
-        # print(f"self array shape transpose: {self.array.transpose((0, 2, 1)).shape}, other array shape : {other.array.shape}")
         out = MicroTensor(self.array.T@other.array)
         
         def backward():
-            self.grad = (out.grad@other.array.transpose(0, 2, 1)).transpose(0, 2, 1)
-            other.grad = self.array@out.grad
+            self.grad += (out.grad@other.array.transpose(0, 2, 1)).transpose(0, 2, 1)
+            other.grad += self.array@out.grad
             
         out.backward_ = backward
         
@@ -36,7 +35,7 @@ class MicroTensor:
         out = MicroTensor(np.where(self.array < 0, 0, self.array))
         
         def backward():
-            self.grad += np.where(out.array < 0, 0, 1)*out.grad
+            self.grad += (out.array > 0)*out.grad
         
         out.backward_ = backward
         
@@ -46,7 +45,7 @@ class MicroTensor:
         out = MicroTensor(np.tanh(self.array))
         
         def backward():
-            self.grad += (1 - np.tanh(self.array))*out.grad
+            self.grad += (1 - out.array**2)*out.grad
             
         out.backward_ = backward
         
@@ -58,7 +57,7 @@ class MicroTensor:
         out = MicroTensor(sigmoid(self.array))
         
         def backward():
-            self.grad += (sigmoid(self.array)*(1 - sigmoid(self.array)))*out.grad
+            self.grad += (out.array*(1 - out.array))*out.grad
             
         out.backward_ = backward
         
@@ -66,13 +65,15 @@ class MicroTensor:
     
     def Softmax(self):
         e_x = np.exp(self.array - np.max(self.array, axis=1, keepdims=True))
-        return e_x / np.sum(e_x, axis=1, keepdims=True)
+        return e_x / (np.sum(e_x, axis=1, keepdims=True))
     
     def CrossEntopyLoss(self, Y : np.ndarray):
-        out = MicroTensor(np.mean(-np.sum(Y*np.log(self.Softmax()), axis=1), axis=0))
+        softmax = self.Softmax()
+        
+        out = MicroTensor(np.mean(-np.sum(Y*np.log(softmax.clip(1e-15, 1)), axis=1), axis=0))
         
         def backward():
-            self.grad += self.Softmax() - Y
+            self.grad += softmax - Y
             
         out.backward_ = backward
         
