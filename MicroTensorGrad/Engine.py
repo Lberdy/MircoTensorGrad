@@ -1,15 +1,24 @@
 import numpy as np
 
 class MicroTensor:
+    
+    # batch normalization attribute
+    BN_momentum = 0.1
+    training = True
+    
     def __init__(self, np_array : np.ndarray):
         self.array = np_array
         self.grad = 0
         self.backward_ = lambda : None
         
+        # other batch normalization attributes
+        self.BN_EMA_mean = 0
+        self.BN_EMA_variance = 1
+        
     def zero_grad(self):
         self.grad = 0
     
-    def __matmul__(self, other):
+    def __matmul__(self, other : MicroTensor):
         out = MicroTensor(self.array.T@other.array)
         
         def backward():
@@ -20,7 +29,7 @@ class MicroTensor:
         
         return out
         
-    def __add__(self, other):
+    def __add__(self, other : MicroTensor):
         out = MicroTensor(self.array+other.array)
         
         def backward():
@@ -29,6 +38,17 @@ class MicroTensor:
                     
         out.backward_ = backward
                 
+        return out
+    
+    def __mul__(self, other : MicroTensor):
+        out = MicroTensor(self.array*other.array)
+        
+        def backward():
+            self.grad += other.array*out.grad
+            other.grad += self.array*out.grad
+            
+        out.backward_ = backward
+        
         return out
     
     def RELU(self):
@@ -61,6 +81,27 @@ class MicroTensor:
             
         out.backward_ = backward
         
+        return out
+    
+    def BatchNorm(self):
+        epsilon = 1e-8
+        
+        if MicroTensor.training:
+            mean = np.mean(self.array, axis=0, keepdims=True)
+            variance = np.square(np.std(self.array, axis=0, keepdims=True))
+                    
+            out = MicroTensor((self.array - mean)/(variance + epsilon))
+            
+            def backward():
+                self.grad += (1/(variance + epsilon))*out.grad
+            
+            out.backward_ = backward
+            
+            self.BN_EMA_mean = (1 - MicroTensor.BN_momentum)*self.BN_EMA_mean + MicroTensor.BN_momentum*mean
+            self.BN_EMA_variance = (1 - MicroTensor.BN_momentum)*self.BN_EMA_variance + MicroTensor.BN_momentum*variance
+        else:
+            out = MicroTensor((self.array - self.BN_EMA_mean)/(self.BN_EMA_variance + epsilon))
+            
         return out
     
     def Softmax(self):
